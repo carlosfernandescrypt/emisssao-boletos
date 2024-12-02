@@ -3,6 +3,7 @@ const axios = require("axios");
 const https = require("https");
 const app = express();
 const PORT = process.env.PORT || 3000;
+require("dotenv").config();
 
 app.use(express.json());
 
@@ -12,10 +13,8 @@ app.get("/", (req, res) => {
 
 app.post("/api/boletos", async (req, res) => {
   try {
-    console.log("Requisição POST recebida para /api/boletos");
-    const { usuario, senha } = req.body;
-    console.log(`Usuário recebido: ${usuario}`);
-    console.log(`Senha recebida: ${senha}`);
+    const usuario = process.env.API_USUARIO;
+    const senha = process.env.API_SENHA;
 
     const authResponse = await axios.post(
       "https://one.nuvemdatacom.com.br:9491/mge/service.sbr?serviceName=MobileLoginSP.login&outputType=json",
@@ -36,6 +35,7 @@ app.post("/api/boletos", async (req, res) => {
     );
 
     const jsessionId = authResponse.data?.responseBody?.jsessionid?.$;
+    console.log("SESSIONID", jsessionId);
 
     if (!jsessionId) {
       console.error(
@@ -44,8 +44,6 @@ app.post("/api/boletos", async (req, res) => {
       );
       throw new Error("Erro ao autenticar: JSESSIONID não encontrado.");
     }
-
-    console.log("JSESSIONID obtido com sucesso:", jsessionId);
 
     const agent = new https.Agent({
       rejectUnauthorized: false,
@@ -98,21 +96,7 @@ app.post("/api/boletos", async (req, res) => {
       }
     );
 
-    console.log(
-      "Resposta da API de boletos recebida:",
-      JSON.stringify(boletoResponse.data, null, 2)
-    );
-
     const chaveArquivo = boletoResponse.data?.responseBody?.boleto?.valor;
-    console.log("Chave do boleto obtida:", chaveArquivo);
-
-    if (!chaveArquivo) {
-      console.error(
-        "Chave do boleto não encontrada. Resposta da API de boletos:",
-        boletoResponse.data
-      );
-      return res.status(400).json({ error: "Chave do boleto não encontrada." });
-    }
 
     const boletoUrl = `https://one.nuvemdatacom.com.br:9491/mge/visualizadorArquivos.mge?download=S&chaveArquivo=${chaveArquivo}`;
     console.log("URL do boleto gerada:", boletoUrl);
