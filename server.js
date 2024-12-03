@@ -1,11 +1,23 @@
 const express = require("express");
+const cors = require("cors");
 const axios = require("axios");
 const https = require("https");
-const app = express();
-const PORT = process.env.PORT || 3000;
 require("dotenv").config();
 
+const app = express();
+const PORT = process.env.PORT || 3000;
+
 app.use(express.json());
+
+// Adicione o CORS
+app.use(
+  cors({
+    origin: "https://areacliente.oneelevadores.com.br", // Origem permitida (substitua pela origem do front-end)
+    methods: ["GET", "POST"], // Métodos HTTP permitidos
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie"], // Cabeçalhos permitidos
+    credentials: true, // Permite cookies
+  })
+);
 
 app.get("/", (req, res) => {
   res.send("Bem-vindo ao servidor Node.js!");
@@ -35,13 +47,8 @@ app.post("/api/boletos", async (req, res) => {
     );
 
     const jsessionId = authResponse.data?.responseBody?.jsessionid?.$;
-    console.log("SESSIONID", jsessionId);
 
     if (!jsessionId) {
-      console.error(
-        "Erro ao obter o JSESSIONID. Resposta completa da autenticação:",
-        authResponse.data
-      );
       throw new Error("Erro ao autenticar: JSESSIONID não encontrado.");
     }
 
@@ -99,12 +106,21 @@ app.post("/api/boletos", async (req, res) => {
     const chaveArquivo = boletoResponse.data?.responseBody?.boleto?.valor;
 
     const boletoUrl = `https://one.nuvemdatacom.com.br:9491/mge/visualizadorArquivos.mge?download=S&chaveArquivo=${chaveArquivo}`;
-    console.log("URL do boleto gerada:", boletoUrl);
 
-    res.json({ boletoUrl });
+    const boletoDownload = await axios.get(boletoUrl, {
+      responseType: "stream", // Receber como stream para enviar direto ao cliente
+      headers: {
+        Cookie: `JSESSIONID=${jsessionId}`,
+      },
+      httpsAgent: agent,
+    });
+
+    // Etapa 4: Retornar o arquivo como resposta
+    res.setHeader("Content-Type", "application/pdf");
+    boletoDownload.data.pipe(res); // Enviar o stream do PDF como resposta
   } catch (error) {
-    console.error("Erro ao buscar boletos:", error.message);
-    res.status(500).json({ error: error.message || "Erro ao buscar boletos" });
+    console.error("Erro ao buscar boleto:", error.message);
+    res.status(500).json({ error: error.message || "Erro ao buscar boleto" });
   }
 });
 
